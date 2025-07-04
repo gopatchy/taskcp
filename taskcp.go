@@ -79,16 +79,22 @@ func (p *Project) InsertTaskBefore(id string, instructions string, changeCallbac
 }
 
 func (p *Project) GetNextTask() *Task {
+	if p.NextTaskID == "" {
+		return nil
+	}
+
 	return p.Tasks[p.NextTaskID]
 }
 
-func (p *Project) SetTaskSuccess(id string, result string, notes string) {
+func (p *Project) SetTaskSuccess(id string, result string, notes string) *Task {
 	task := p.Tasks[id]
 	task.State = TaskStateSuccess
 	task.Result = result
 	task.Notes = notes
 	task.ChangeCallback(task)
 	p.NextTaskID = task.NextTaskID
+
+	return p.GetNextTask()
 }
 
 func (p *Project) SetTaskFailure(id string, error string, notes string) {
