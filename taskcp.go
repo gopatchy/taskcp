@@ -27,18 +27,15 @@ const (
 )
 
 type Task struct {
-	ID                 string
-	State              TaskState
-	NextTaskID         string
-	CompletionCallback func(task *Task)
+	ID           string    `json:"id"`
+	State        TaskState `json:"-"`
+	Instructions string    `json:"instructions"`
+	Result       string    `json:"-"`
+	Error        string    `json:"-"`
+	Notes        string    `json:"-"`
 
-	// Written by creator
-	Instructions string
-
-	// Written by executor
-	Result string
-	Error  string
-	Notes  string
+	nextTaskID         string
+	completionCallback func(task *Task)
 }
 
 func New() *Service {
@@ -66,12 +63,12 @@ func (s *Service) GetProject(id string) (*Project, error) {
 	return project, nil
 }
 
-func (p *Project) InsertTaskBefore(id string, instructions string, completionCallback func(task *Task)) *Task {
-	task := p.newTask(instructions, completionCallback, id)
+func (p *Project) InsertTaskBefore(beforeID string, instructions string, completionCallback func(task *Task)) *Task {
+	task := p.newTask(instructions, completionCallback, beforeID)
 
 	for t := range p.tasks() {
-		if t.NextTaskID == id {
-			t.NextTaskID = task.ID
+		if t.nextTaskID == beforeID {
+			t.nextTaskID = task.ID
 			break
 		}
 	}
@@ -94,8 +91,8 @@ func (p *Project) SetTaskSuccess(id string, result string, notes string) *Task {
 	task.State = TaskStateSuccess
 	task.Result = result
 	task.Notes = notes
-	task.CompletionCallback(task)
-	p.NextTaskID = task.NextTaskID
+	task.completionCallback(task)
+	p.NextTaskID = task.nextTaskID
 
 	return p.GetNextTask()
 }
@@ -105,8 +102,8 @@ func (p *Project) SetTaskFailure(id string, error string, notes string) *Task {
 	task.State = TaskStateFailure
 	task.Error = error
 	task.Notes = notes
-	task.CompletionCallback(task)
-	p.NextTaskID = task.NextTaskID
+	task.completionCallback(task)
+	p.NextTaskID = task.nextTaskID
 
 	return p.GetNextTask()
 }
@@ -115,9 +112,9 @@ func (p *Project) newTask(instructions string, completionCallback func(task *Tas
 	task := &Task{
 		ID:                 uuid.New().String(),
 		State:              TaskStatePending,
-		NextTaskID:         nextTaskID,
+		nextTaskID:         nextTaskID,
 		Instructions:       instructions,
-		CompletionCallback: completionCallback,
+		completionCallback: completionCallback,
 	}
 	p.Tasks[task.ID] = task
 	return task
@@ -125,7 +122,7 @@ func (p *Project) newTask(instructions string, completionCallback func(task *Tas
 
 func (p *Project) tasks() iter.Seq[*Task] {
 	return func(yield func(*Task) bool) {
-		for tid := p.NextTaskID; tid != ""; tid = p.Tasks[tid].NextTaskID {
+		for tid := p.NextTaskID; tid != ""; tid = p.Tasks[tid].nextTaskID {
 			t := p.Tasks[tid]
 			if !yield(t) {
 				return

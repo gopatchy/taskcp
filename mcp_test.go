@@ -11,7 +11,7 @@ func TestRegisterMCPTools(t *testing.T) {
 
 	s := server.NewMCPServer("Test Server", "1.0.0")
 
-	err := RegisterMCPTools(s, service)
+	err := service.RegisterMCPTools(s)
 	if err != nil {
 		t.Fatalf("Failed to register MCP tools: %v", err)
 	}
