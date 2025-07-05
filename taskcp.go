@@ -3,18 +3,21 @@ package taskcp
 import (
 	"fmt"
 	"iter"
+	"strings"
 
 	"github.com/google/uuid"
 )
 
 type Service struct {
-	Projects map[string]*Project
+	Projects    map[string]*Project
+	mcpService  string
 }
 
 type Project struct {
 	ID         string
 	Tasks      map[string]*Task
-	NextTaskID string
+	nextTaskID string
+	mcpService string
 }
 
 type TaskState string
@@ -34,13 +37,16 @@ type Task struct {
 	Error        string    `json:"-"`
 	Notes        string    `json:"-"`
 
+	projectID          string
+	mcpService         string
 	nextTaskID         string
 	completionCallback func(task *Task)
 }
 
-func New() *Service {
+func New(mcpService string) *Service {
 	return &Service{
-		Projects: map[string]*Project{},
+		Projects:   map[string]*Project{},
+		mcpService: mcpService,
 	}
 }
 
@@ -48,7 +54,8 @@ func (s *Service) AddProject() *Project {
 	project := &Project{
 		ID:         uuid.New().String(),
 		Tasks:      map[string]*Task{},
-		NextTaskID: "",
+		nextTaskID: "",
+		mcpService: s.mcpService,
 	}
 	s.Projects[project.ID] = project
 	return project
@@ -66,10 +73,14 @@ func (s *Service) GetProject(id string) (*Project, error) {
 func (p *Project) InsertTaskBefore(beforeID string, instructions string, completionCallback func(task *Task)) *Task {
 	task := p.newTask(instructions, completionCallback, beforeID)
 
-	for t := range p.tasks() {
-		if t.nextTaskID == beforeID {
-			t.nextTaskID = task.ID
-			break
+	if p.nextTaskID == "" && beforeID == "" {
+		p.nextTaskID = task.ID
+	} else {
+		for t := range p.tasks() {
+			if t.nextTaskID == beforeID {
+				t.nextTaskID = task.ID
+				break
+			}
 		}
 	}
 
@@ -77,11 +88,11 @@ func (p *Project) InsertTaskBefore(beforeID string, instructions string, complet
 }
 
 func (p *Project) GetNextTask() *Task {
-	if p.NextTaskID == "" {
+	if p.nextTaskID == "" {
 		return nil
 	}
 
-	task := p.Tasks[p.NextTaskID]
+	task := p.Tasks[p.nextTaskID]
 	task.State = TaskStateRunning
 	return task
 }
@@ -92,7 +103,7 @@ func (p *Project) SetTaskSuccess(id string, result string, notes string) *Task {
 	task.Result = result
 	task.Notes = notes
 	task.completionCallback(task)
-	p.NextTaskID = task.nextTaskID
+	p.nextTaskID = task.nextTaskID
 
 	return p.GetNextTask()
 }
@@ -103,7 +114,7 @@ func (p *Project) SetTaskFailure(id string, error string, notes string) *Task {
 	task.Error = error
 	task.Notes = notes
 	task.completionCallback(task)
-	p.NextTaskID = task.nextTaskID
+	p.nextTaskID = task.nextTaskID
 
 	return p.GetNextTask()
 }
@@ -115,14 +126,20 @@ func (p *Project) newTask(instructions string, completionCallback func(task *Tas
 		nextTaskID:         nextTaskID,
 		Instructions:       instructions,
 		completionCallback: completionCallback,
+		projectID:          p.ID,
+		mcpService:         p.mcpService,
 	}
+	
+	task.Instructions = strings.ReplaceAll(task.Instructions, "{SUCCESS_PROMPT}", task.SuccessPrompt())
+	task.Instructions = strings.ReplaceAll(task.Instructions, "{FAILURE_PROMPT}", task.FailurePrompt())
+	
 	p.Tasks[task.ID] = task
 	return task
 }
 
 func (p *Project) tasks() iter.Seq[*Task] {
 	return func(yield func(*Task) bool) {
-		for tid := p.NextTaskID; tid != ""; tid = p.Tasks[tid].nextTaskID {
+		for tid := p.nextTaskID; tid != ""; tid = p.Tasks[tid].nextTaskID {
 			t := p.Tasks[tid]
 			if !yield(t) {
 				return
@@ -130,3 +147,16 @@ func (p *Project) tasks() iter.Seq[*Task] {
 		}
 	}
 }
+
+func (t *Task) SuccessPrompt() string {
+	return fmt.Sprintf(`To mark this task as successful, use the MCP tool:
+%s.set_task_success(project_id="%s", task_id="%s", result="<your result>", notes="<optional notes>")`, 
+		t.mcpService, t.projectID, t.ID)
+}
+
+func (t *Task) FailurePrompt() string {
+	return fmt.Sprintf(`To mark this task as failed, use the MCP tool:
+%s.set_task_failure(project_id="%s", task_id="%s", error="<error message>", notes="<optional notes>")`, 
+		t.mcpService, t.projectID, t.ID)
+}
+

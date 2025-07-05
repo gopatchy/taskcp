@@ -7,7 +7,7 @@ import (
 )
 
 func TestRegisterMCPTools(t *testing.T) {
-	service := New()
+	service := New("test_service")
 
 	s := server.NewMCPServer("Test Server", "1.0.0")
 
