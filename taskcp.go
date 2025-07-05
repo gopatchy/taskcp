@@ -27,10 +27,10 @@ const (
 )
 
 type Task struct {
-	ID             string
-	State          TaskState
-	NextTaskID     string
-	ChangeCallback func(task *Task)
+	ID                 string
+	State              TaskState
+	NextTaskID         string
+	CompletionCallback func(task *Task)
 
 	// Written by creator
 	Instructions string
@@ -62,11 +62,12 @@ func (s *Service) GetProject(id string) (*Project, error) {
 	if !ok {
 		return nil, fmt.Errorf("project not found")
 	}
+
 	return project, nil
 }
 
-func (p *Project) InsertTaskBefore(id string, instructions string, changeCallback func(task *Task)) *Task {
-	task := p.newTask(instructions, changeCallback, id)
+func (p *Project) InsertTaskBefore(id string, instructions string, completionCallback func(task *Task)) *Task {
+	task := p.newTask(instructions, completionCallback, id)
 
 	for t := range p.tasks() {
 		if t.NextTaskID == id {
@@ -83,7 +84,9 @@ func (p *Project) GetNextTask() *Task {
 		return nil
 	}
 
-	return p.Tasks[p.NextTaskID]
+	task := p.Tasks[p.NextTaskID]
+	task.State = TaskStateRunning
+	return task
 }
 
 func (p *Project) SetTaskSuccess(id string, result string, notes string) *Task {
@@ -91,27 +94,30 @@ func (p *Project) SetTaskSuccess(id string, result string, notes string) *Task {
 	task.State = TaskStateSuccess
 	task.Result = result
 	task.Notes = notes
-	task.ChangeCallback(task)
+	task.CompletionCallback(task)
 	p.NextTaskID = task.NextTaskID
 
 	return p.GetNextTask()
 }
 
-func (p *Project) SetTaskFailure(id string, error string, notes string) {
+func (p *Project) SetTaskFailure(id string, error string, notes string) *Task {
 	task := p.Tasks[id]
 	task.State = TaskStateFailure
 	task.Error = error
 	task.Notes = notes
-	task.ChangeCallback(task)
+	task.CompletionCallback(task)
+	p.NextTaskID = task.NextTaskID
+
+	return p.GetNextTask()
 }
 
-func (p *Project) newTask(instructions string, changeCallback func(task *Task), nextTaskID string) *Task {
+func (p *Project) newTask(instructions string, completionCallback func(task *Task), nextTaskID string) *Task {
 	task := &Task{
-		ID:             uuid.New().String(),
-		State:          TaskStatePending,
-		NextTaskID:     nextTaskID,
-		Instructions:   instructions,
-		ChangeCallback: changeCallback,
+		ID:                 uuid.New().String(),
+		State:              TaskStatePending,
+		NextTaskID:         nextTaskID,
+		Instructions:       instructions,
+		CompletionCallback: completionCallback,
 	}
 	p.Tasks[task.ID] = task
 	return task
