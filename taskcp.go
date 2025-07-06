@@ -137,6 +137,7 @@ func (p *Project) newTask(instructions string, completionCallback func(task *Tas
 		State:              TaskStatePending,
 		nextTaskID:         nextTaskID,
 		Instructions:       instructions,
+		Data:               map[string]any{},
 		completionCallback: completionCallback,
 		projectID:          p.ID,
 		mcpService:         p.mcpService,
