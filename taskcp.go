@@ -1,6 +1,7 @@
 package taskcp
 
 import (
+	"encoding/json"
 	"fmt"
 	"iter"
 	"strings"
@@ -30,12 +31,13 @@ const (
 )
 
 type Task struct {
-	ID           string    `json:"id"`
-	State        TaskState `json:"-"`
-	Instructions string    `json:"instructions"`
-	Result       string    `json:"-"`
-	Error        string    `json:"-"`
-	Notes        string    `json:"-"`
+	ID           string         `json:"id"`
+	State        TaskState      `json:"-"`
+	Instructions string         `json:"instructions"`
+	Data         map[string]any `json:"data,omitempty"`
+	Result       string         `json:"-"`
+	Error        string         `json:"-"`
+	Notes        string         `json:"-"`
 
 	projectID          string
 	mcpService         string
@@ -168,4 +170,13 @@ func (t *Task) FailurePrompt() string {
 	return fmt.Sprintf(`To mark this task as failed, use the MCP tool:
 %s.set_task_failure(project_id="%s", task_id="%s", error="<error message>", notes="<optional notes>")`,
 		t.mcpService, t.projectID, t.ID)
+}
+
+func (t *Task) String() string {
+	json, err := json.MarshalIndent(t, "", "  ")
+	if err != nil {
+		panic(err)
+	}
+
+	return string(json)
 }
