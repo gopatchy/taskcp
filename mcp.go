@@ -115,7 +115,10 @@ func handleSetTaskSuccess(s *Service, ctx context.Context, args setTaskSuccessAr
 		return nil, fmt.Errorf("failed to get project: %w", err)
 	}
 
-	nextTask := project.SetTaskSuccess(args.TaskID, args.Result, args.Notes)
+	nextTask, err := project.SetTaskSuccess(args.TaskID, args.Result, args.Notes)
+	if err != nil {
+		return nil, fmt.Errorf("completion callback error: %w", err)
+	}
 
 	response := &taskResponse{
 		TaskID:   args.TaskID,
@@ -132,7 +135,10 @@ func handleSetTaskFailure(s *Service, ctx context.Context, args setTaskFailureAr
 		return nil, fmt.Errorf("failed to get project: %w", err)
 	}
 
-	nextTask := project.SetTaskFailure(args.TaskID, args.Error, args.Notes)
+	nextTask, err := project.SetTaskFailure(args.TaskID, args.Error, args.Notes)
+	if err != nil {
+		return nil, fmt.Errorf("completion callback error: %w", err)
+	}
 
 	response := &taskResponse{
 		TaskID:   args.TaskID,
