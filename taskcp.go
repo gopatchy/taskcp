@@ -39,9 +39,10 @@ type Task struct {
 	Error        string         `json:"-"`
 	Notes        string         `json:"-"`
 
+	NextTaskID string `json:"-"`
+
 	projectID          string
 	mcpService         string
-	nextTaskID         string
 	completionCallback func(task *Task) error
 }
 
@@ -79,8 +80,8 @@ func (p *Project) InsertTaskBefore(beforeID string, instructions string, complet
 		p.nextTaskID = task.ID
 	} else {
 		for t := range p.tasks() {
-			if t.nextTaskID == beforeID {
-				t.nextTaskID = task.ID
+			if t.NextTaskID == beforeID {
+				t.NextTaskID = task.ID
 				break
 			}
 		}
@@ -110,7 +111,7 @@ func (p *Project) SetTaskSuccess(id string, result string, notes string) (*Task,
 		return nil, err
 	}
 
-	p.nextTaskID = task.nextTaskID
+	p.nextTaskID = task.NextTaskID
 
 	return p.GetNextTask(), nil
 }
@@ -126,7 +127,7 @@ func (p *Project) SetTaskFailure(id string, error string, notes string) (*Task, 
 		return nil, err
 	}
 
-	p.nextTaskID = task.nextTaskID
+	p.nextTaskID = task.NextTaskID
 
 	return p.GetNextTask(), nil
 }
@@ -135,7 +136,7 @@ func (p *Project) newTask(instructions string, completionCallback func(task *Tas
 	task := &Task{
 		ID:                 uuid.New().String(),
 		State:              TaskStatePending,
-		nextTaskID:         nextTaskID,
+		NextTaskID:         nextTaskID,
 		Instructions:       instructions,
 		Data:               map[string]any{},
 		completionCallback: completionCallback,
@@ -152,7 +153,7 @@ func (p *Project) newTask(instructions string, completionCallback func(task *Tas
 
 func (p *Project) tasks() iter.Seq[*Task] {
 	return func(yield func(*Task) bool) {
-		for tid := p.nextTaskID; tid != ""; tid = p.Tasks[tid].nextTaskID {
+		for tid := p.nextTaskID; tid != ""; tid = p.Tasks[tid].NextTaskID {
 			t := p.Tasks[tid]
 			if !yield(t) {
 				return
