@@ -113,7 +113,12 @@ func handleSetTaskSuccess(s *Service, ctx context.Context, args setTaskSuccessAr
 		return nil, fmt.Errorf("failed to get project: %w", err)
 	}
 
-	nextTask, err := project.SetTaskSuccess(args.TaskID, args.Result, args.Notes)
+	task, err := project.GetRunningTask(args.TaskID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get task: %w", err)
+	}
+
+	nextTask, err := task.SetSuccess(args.Result, args.Notes)
 	if err != nil {
 		return nil, fmt.Errorf("completion callback error: %w", err)
 	}
@@ -131,7 +136,12 @@ func handleSetTaskFailure(s *Service, ctx context.Context, args setTaskFailureAr
 		return nil, fmt.Errorf("failed to get project: %w", err)
 	}
 
-	nextTask, err := project.SetTaskFailure(args.TaskID, args.Error, args.Notes)
+	task, err := project.GetRunningTask(args.TaskID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get task: %w", err)
+	}
+
+	nextTask, err := task.SetFailure(args.Error, args.Notes)
 	if err != nil {
 		return nil, fmt.Errorf("completion callback error: %w", err)
 	}
