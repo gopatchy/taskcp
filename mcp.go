@@ -10,23 +10,21 @@ import (
 )
 
 type setTaskSuccessArgs struct {
-	ProjectID string `json:"project_id"`
-	TaskID    string `json:"task_id"`
+	ProjectID int    `json:"project_id"`
+	TaskID    int    `json:"task_id"`
 	Result    string `json:"result"`
 	Notes     string `json:"notes,omitempty"`
 }
 
 type setTaskFailureArgs struct {
-	ProjectID string `json:"project_id"`
-	TaskID    string `json:"task_id"`
+	ProjectID int    `json:"project_id"`
+	TaskID    int    `json:"task_id"`
 	Error     string `json:"error"`
 	Notes     string `json:"notes,omitempty"`
 }
 
 type taskResponse struct {
-	TaskID   string `json:"task_id"`
-	Message  string `json:"message"`
-	NextTask *Task  `json:"next_task,omitempty"`
+	NextTask *Task `json:"next_task"`
 }
 
 type errorResponse struct {
@@ -64,7 +62,7 @@ func (s *Service) RegisterMCPTools(mcpServer *server.MCPServer) error {
 		mcp.NewTool(
 			"set_task_success",
 			mcp.WithDescription("Mark a task as successfully completed"),
-			mcp.WithString("project_id",
+			mcp.WithNumber("project_id",
 				mcp.Required(),
 				mcp.Description("The project ID"),
 			),
@@ -87,7 +85,7 @@ func (s *Service) RegisterMCPTools(mcpServer *server.MCPServer) error {
 		mcp.NewTool(
 			"set_task_failure",
 			mcp.WithDescription("Mark a task as failed"),
-			mcp.WithString("project_id",
+			mcp.WithNumber("project_id",
 				mcp.Required(),
 				mcp.Description("The project ID"),
 			),
@@ -121,8 +119,6 @@ func handleSetTaskSuccess(s *Service, ctx context.Context, args setTaskSuccessAr
 	}
 
 	response := &taskResponse{
-		TaskID:   args.TaskID,
-		Message:  fmt.Sprintf("Task %s marked as successful", args.TaskID),
 		NextTask: nextTask,
 	}
 
@@ -141,8 +137,6 @@ func handleSetTaskFailure(s *Service, ctx context.Context, args setTaskFailureAr
 	}
 
 	response := &taskResponse{
-		TaskID:   args.TaskID,
-		Message:  fmt.Sprintf("Task %s marked as failed", args.TaskID),
 		NextTask: nextTask,
 	}
 

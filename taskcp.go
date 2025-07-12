@@ -5,19 +5,17 @@ import (
 	"fmt"
 	"iter"
 	"strings"
-
-	"github.com/google/uuid"
 )
 
 type Service struct {
-	Projects   map[string]*Project
+	projects   []*Project
 	mcpService string
 }
 
 type Project struct {
-	ID         string
-	Tasks      map[string]*Task
-	nextTaskID string
+	ID         int
+	Tasks      []*Task
+	nextTaskID int
 	mcpService string
 }
 
@@ -31,7 +29,7 @@ const (
 )
 
 type Task struct {
-	ID           string         `json:"id"`
+	ID           int            `json:"id"`
 	State        TaskState      `json:"-"`
 	Title        string         `json:"title"`
 	Instructions string         `json:"instructions"`
@@ -40,7 +38,7 @@ type Task struct {
 	Error        string         `json:"-"`
 	Notes        string         `json:"-"`
 
-	NextTaskID string `json:"-"`
+	NextTaskID int `json:"-"`
 
 	project            *Project
 	completionCallback func(project *Project, task *Task) error
@@ -59,50 +57,48 @@ type ProjectSummary struct {
 
 func New(mcpService string) *Service {
 	return &Service{
-		Projects:   map[string]*Project{},
 		mcpService: mcpService,
 	}
 }
 
 func (s *Service) AddProject() *Project {
 	project := &Project{
-		ID:         uuid.New().String(),
-		Tasks:      map[string]*Task{},
-		nextTaskID: "",
+		ID:         len(s.projects),
+		Tasks:      []*Task{},
+		nextTaskID: -1,
 		mcpService: s.mcpService,
 	}
-	s.Projects[project.ID] = project
+	s.projects = append(s.projects, project)
 	return project
 }
 
-func (s *Service) GetProject(id string) (*Project, error) {
-	project, ok := s.Projects[id]
-	if !ok {
-		return nil, fmt.Errorf("project not found")
+func (s *Service) GetProject(id int) (*Project, error) {
+	if id < 0 || id >= len(s.projects) {
+		return nil, fmt.Errorf("invalid project id: %d", id)
 	}
 
-	return project, nil
+	return s.projects[id], nil
 }
 
-func (p *Project) InsertTaskBefore(beforeID string, title string, instructions string, completionCallback func(project *Project, task *Task) error) *Task {
-	task := p.newTask(title, instructions, completionCallback, beforeID)
+func (p *Project) InsertTaskBefore(beforeID int, title string, instructions string, completionCallback func(project *Project, task *Task) error) *Task {
+	newTask := p.newTask(title, instructions, completionCallback, beforeID)
 
-	if p.nextTaskID == "" && beforeID == "" {
-		p.nextTaskID = task.ID
+	if p.nextTaskID == -1 && beforeID == -1 {
+		p.nextTaskID = newTask.ID
 	} else {
 		for t := range p.tasks() {
 			if t.NextTaskID == beforeID {
-				t.NextTaskID = task.ID
+				t.NextTaskID = newTask.ID
 				break
 			}
 		}
 	}
 
-	return task
+	return newTask
 }
 
 func (p *Project) GetNextTask() *Task {
-	if p.nextTaskID == "" {
+	if p.nextTaskID == -1 {
 		return nil
 	}
 
@@ -111,7 +107,7 @@ func (p *Project) GetNextTask() *Task {
 	return task
 }
 
-func (p *Project) SetTaskSuccess(id string, result string, notes string) (*Task, error) {
+func (p *Project) SetTaskSuccess(id int, result string, notes string) (*Task, error) {
 	task := p.Tasks[id]
 	task.State = TaskStateSuccess
 	task.Result = result
@@ -129,7 +125,7 @@ func (p *Project) SetTaskSuccess(id string, result string, notes string) (*Task,
 	return p.GetNextTask(), nil
 }
 
-func (p *Project) SetTaskFailure(id string, error string, notes string) (*Task, error) {
+func (p *Project) SetTaskFailure(id int, error string, notes string) (*Task, error) {
 	task := p.Tasks[id]
 	task.State = TaskStateFailure
 	task.Error = error
@@ -147,9 +143,9 @@ func (p *Project) SetTaskFailure(id string, error string, notes string) (*Task, 
 	return p.GetNextTask(), nil
 }
 
-func (p *Project) newTask(title string, instructions string, completionCallback func(project *Project, task *Task) error, nextTaskID string) *Task {
+func (p *Project) newTask(title string, instructions string, completionCallback func(project *Project, task *Task) error, nextTaskID int) *Task {
 	task := &Task{
-		ID:                 uuid.New().String(),
+		ID:                 len(p.Tasks),
 		State:              TaskStatePending,
 		NextTaskID:         nextTaskID,
 		Title:              title,
@@ -162,13 +158,13 @@ func (p *Project) newTask(title string, instructions string, completionCallback 
 	task.Instructions = strings.ReplaceAll(task.Instructions, "{SUCCESS_PROMPT}", task.SuccessPrompt())
 	task.Instructions = strings.ReplaceAll(task.Instructions, "{FAILURE_PROMPT}", task.FailurePrompt())
 
-	p.Tasks[task.ID] = task
+	p.Tasks = append(p.Tasks, task)
 	return task
 }
 
 func (p *Project) tasks() iter.Seq[*Task] {
 	return func(yield func(*Task) bool) {
-		for tid := p.nextTaskID; tid != ""; tid = p.Tasks[tid].NextTaskID {
+		for tid := p.nextTaskID; tid != -1; tid = p.Tasks[tid].NextTaskID {
 			t := p.Tasks[tid]
 			if !yield(t) {
 				return
@@ -194,13 +190,13 @@ func (p *Project) Summary() ProjectSummary {
 
 func (t *Task) SuccessPrompt() string {
 	return fmt.Sprintf(`To mark this task as successful, use the MCP tool:
-%s.set_task_success(project_id="%s", task_id="%s", result="<your result>", notes="<optional notes>")`,
+%s.set_task_success(project_id=%d, task_id=%d, result="<your result>", notes="<optional notes>")`,
 		t.project.mcpService, t.project.ID, t.ID)
 }
 
 func (t *Task) FailurePrompt() string {
 	return fmt.Sprintf(`To mark this task as failed, use the MCP tool:
-%s.set_task_failure(project_id="%s", task_id="%s", error="<error message>", notes="<optional notes>")`,
+%s.set_task_failure(project_id=%d, task_id=%d, error="<error message>", notes="<optional notes>")`,
 		t.project.mcpService, t.project.ID, t.ID)
 }
 
