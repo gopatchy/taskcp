@@ -46,6 +46,17 @@ type Task struct {
 	completionCallback func(project *Project, task *Task) error
 }
 
+type TaskSummary struct {
+	Title string    `json:"title"`
+	State TaskState `json:"state"`
+	Error string    `json:"error,omitempty"`
+	Notes string    `json:"notes,omitempty"`
+}
+
+type ProjectSummary struct {
+	Tasks []TaskSummary `json:"tasks"`
+}
+
 func New(mcpService string) *Service {
 	return &Service{
 		Projects:   map[string]*Project{},
@@ -166,6 +177,21 @@ func (p *Project) tasks() iter.Seq[*Task] {
 	}
 }
 
+func (p *Project) Summary() ProjectSummary {
+	var tasks []TaskSummary
+	for _, task := range p.Tasks {
+		if task.State != TaskStatePending {
+			tasks = append(tasks, TaskSummary{
+				Title: task.Title,
+				State: task.State,
+				Error: task.Error,
+				Notes: task.Notes,
+			})
+		}
+	}
+	return ProjectSummary{Tasks: tasks}
+}
+
 func (t *Task) SuccessPrompt() string {
 	return fmt.Sprintf(`To mark this task as successful, use the MCP tool:
 %s.set_task_success(project_id="%s", task_id="%s", result="<your result>", notes="<optional notes>")`,
@@ -180,6 +206,15 @@ func (t *Task) FailurePrompt() string {
 
 func (t *Task) String() string {
 	json, err := json.MarshalIndent(t, "", "  ")
+	if err != nil {
+		panic(err)
+	}
+
+	return string(json)
+}
+
+func (ps ProjectSummary) String() string {
+	json, err := json.MarshalIndent(ps, "", "  ")
 	if err != nil {
 		panic(err)
 	}
