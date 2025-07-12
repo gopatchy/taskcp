@@ -80,8 +80,8 @@ func (s *Service) GetProject(id int) (*Project, error) {
 	return s.projects[id], nil
 }
 
-func (p *Project) InsertTaskBefore(beforeID int, title string, instructions string, completionCallback func(project *Project, task *Task) error) *Task {
-	newTask := p.newTask(title, instructions, completionCallback, beforeID)
+func (p *Project) InsertTaskBefore(beforeID int) *Task {
+	newTask := p.newTask(beforeID)
 
 	if p.nextTaskID == -1 && beforeID == -1 {
 		p.nextTaskID = newTask.ID
@@ -143,20 +143,14 @@ func (p *Project) SetTaskFailure(id int, error string, notes string) (*Task, err
 	return p.GetNextTask(), nil
 }
 
-func (p *Project) newTask(title string, instructions string, completionCallback func(project *Project, task *Task) error, nextTaskID int) *Task {
+func (p *Project) newTask(nextTaskID int) *Task {
 	task := &Task{
-		ID:                 len(p.Tasks),
-		State:              TaskStatePending,
-		NextTaskID:         nextTaskID,
-		Title:              title,
-		Instructions:       instructions,
-		Data:               map[string]any{},
-		completionCallback: completionCallback,
-		project:            p,
+		ID:         len(p.Tasks),
+		State:      TaskStatePending,
+		NextTaskID: nextTaskID,
+		Data:       map[string]any{},
+		project:    p,
 	}
-
-	task.Instructions = strings.ReplaceAll(task.Instructions, "{SUCCESS_PROMPT}", task.SuccessPrompt())
-	task.Instructions = strings.ReplaceAll(task.Instructions, "{FAILURE_PROMPT}", task.FailurePrompt())
 
 	p.Tasks = append(p.Tasks, task)
 	return task
@@ -186,6 +180,28 @@ func (p *Project) Summary() ProjectSummary {
 		}
 	}
 	return ProjectSummary{Tasks: tasks}
+}
+
+func (t *Task) WithTitle(title string) *Task {
+	t.Title = title
+	return t
+}
+
+func (t *Task) WithInstructions(instructions string) *Task {
+	t.Instructions = instructions
+	t.Instructions = strings.ReplaceAll(t.Instructions, "{SUCCESS_PROMPT}", t.SuccessPrompt())
+	t.Instructions = strings.ReplaceAll(t.Instructions, "{FAILURE_PROMPT}", t.FailurePrompt())
+	return t
+}
+
+func (t *Task) WithData(key string, value any) *Task {
+	t.Data[key] = value
+	return t
+}
+
+func (t *Task) Then(completionCallback func(project *Project, task *Task) error) *Task {
+	t.completionCallback = completionCallback
+	return t
 }
 
 func (t *Task) SuccessPrompt() string {
